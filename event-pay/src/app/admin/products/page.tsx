@@ -1,0 +1,265 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import type { Product } from "@/lib/order-types";
+
+const accentOptions = [
+  { label: "珊瑚红", value: "bg-[#f66f4d]" },
+  { label: "湖蓝", value: "bg-[#3b82f6]" },
+  { label: "松绿", value: "bg-[#16a34a]" },
+  { label: "金黄", value: "bg-[#d97706]" },
+  { label: "石墨", value: "bg-[#374151]" },
+];
+
+function emptyProduct(): Product {
+  return {
+    id: `product-${Date.now()}`,
+    name: "新商品",
+    description: "",
+    price: 0,
+    stock: 0,
+    accent: accentOptions[0].value,
+    isActive: true,
+  };
+}
+
+export default function ProductsAdminPage() {
+  const router = useRouter();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    const timer = window.setTimeout(async () => {
+      const sessionResponse = await fetch("/api/admin/session");
+      const sessionData = (await sessionResponse.json()) as {
+        authenticated: boolean;
+      };
+
+      if (!sessionData.authenticated) {
+        router.replace("/admin/login?next=/admin/products");
+        return;
+      }
+
+      const response = await fetch("/api/products");
+      const data = (await response.json()) as { products: Product[] };
+      setProducts(data.products);
+      setIsLoading(false);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [router]);
+
+  function updateProduct(productId: string, patch: Partial<Product>) {
+    setProducts((current) =>
+      current.map((product) =>
+        product.id === productId ? { ...product, ...patch } : product,
+      ),
+    );
+  }
+
+  async function saveProducts() {
+    setIsSaving(true);
+    setMessage("");
+
+    const response = await fetch("/api/products", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ products }),
+    });
+    const data = (await response.json()) as {
+      products?: Product[];
+      message?: string;
+    };
+
+    if (response.ok && data.products) {
+      setProducts(data.products);
+      setMessage("商品配置已保存");
+    } else {
+      setMessage(data.message ?? "保存失败");
+    }
+
+    setIsSaving(false);
+  }
+
+  async function logout() {
+    await fetch("/api/admin/logout", { method: "POST" });
+    router.replace("/admin/login");
+  }
+
+  if (isLoading) {
+    return (
+      <main className="min-h-screen bg-[#f7f5ef] px-4 py-6">
+        <div className="mx-auto max-w-5xl">
+          <p className="text-sm text-[#6b6257]">正在验证后台登录...</p>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-[#f7f5ef] px-4 py-6">
+      <div className="mx-auto max-w-5xl">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-[#7b341e]">商家后台</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-normal">
+              商品配置
+            </h1>
+          </div>
+          <div className="flex gap-2">
+            <Link
+              className="rounded-md border border-[#d5d0c6] bg-white px-3 py-2 text-sm font-medium"
+              href="/admin"
+            >
+              返回后台
+            </Link>
+            <Link
+              className="rounded-md border border-[#d5d0c6] bg-white px-3 py-2 text-sm font-medium"
+              href="/"
+            >
+              商品页
+            </Link>
+            <button
+              className="rounded-md border border-[#d5d0c6] bg-white px-3 py-2 text-sm font-medium"
+              onClick={logout}
+              type="button"
+            >
+              退出
+            </button>
+          </div>
+        </div>
+
+        <section className="mt-6 overflow-hidden rounded-lg border border-[#e1ddd4] bg-white">
+          <div className="grid gap-3 border-b border-[#ede8df] p-4 md:grid-cols-[1fr_120px_120px_140px_120px]">
+            <span className="text-sm font-semibold text-[#6b6257]">商品</span>
+            <span className="text-sm font-semibold text-[#6b6257]">价格</span>
+            <span className="text-sm font-semibold text-[#6b6257]">库存</span>
+            <span className="text-sm font-semibold text-[#6b6257]">颜色</span>
+            <span className="text-sm font-semibold text-[#6b6257]">状态</span>
+          </div>
+
+          <div className="divide-y divide-[#ede8df]">
+            {products.map((product) => (
+              <article
+                className="grid gap-3 p-4 md:grid-cols-[1fr_120px_120px_140px_120px]"
+                key={product.id}
+              >
+                <div className="space-y-2">
+                  <input
+                    className="h-10 w-full rounded-md border border-[#d8d2c7] px-3 text-sm font-semibold outline-none focus:border-[#202124]"
+                    onChange={(event) =>
+                      updateProduct(product.id, { name: event.target.value })
+                    }
+                    value={product.name}
+                  />
+                  <textarea
+                    className="min-h-20 w-full rounded-md border border-[#d8d2c7] p-3 text-sm outline-none focus:border-[#202124]"
+                    onChange={(event) =>
+                      updateProduct(product.id, {
+                        description: event.target.value,
+                      })
+                    }
+                    value={product.description}
+                  />
+                </div>
+
+                <input
+                  className="h-10 rounded-md border border-[#d8d2c7] px-3 text-sm outline-none focus:border-[#202124]"
+                  min="0"
+                  onChange={(event) =>
+                    updateProduct(product.id, {
+                      price: Number(event.target.value),
+                    })
+                  }
+                  type="number"
+                  value={product.price}
+                />
+
+                <input
+                  className="h-10 rounded-md border border-[#d8d2c7] px-3 text-sm outline-none focus:border-[#202124]"
+                  min="0"
+                  onChange={(event) =>
+                    updateProduct(product.id, {
+                      stock: Number(event.target.value),
+                    })
+                  }
+                  type="number"
+                  value={product.stock}
+                />
+
+                <select
+                  className="h-10 rounded-md border border-[#d8d2c7] bg-white px-3 text-sm outline-none focus:border-[#202124]"
+                  onChange={(event) =>
+                    updateProduct(product.id, { accent: event.target.value })
+                  }
+                  value={product.accent}
+                >
+                  {accentOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+
+                <div className="space-y-2">
+                  <label className="flex h-10 items-center gap-2 rounded-md border border-[#d8d2c7] px-3 text-sm">
+                    <input
+                      checked={product.isActive}
+                      onChange={(event) =>
+                        updateProduct(product.id, {
+                          isActive: event.target.checked,
+                        })
+                      }
+                      type="checkbox"
+                    />
+                    上架
+                  </label>
+                  <button
+                    className="h-10 w-full rounded-md border border-[#d5d0c6] text-sm font-semibold text-[#b3261e]"
+                    onClick={() =>
+                      setProducts((current) =>
+                        current.filter((item) => item.id !== product.id),
+                      )
+                    }
+                    type="button"
+                  >
+                    删除
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <button
+            className="h-11 rounded-md border border-[#d5d0c6] bg-white px-4 text-sm font-semibold"
+            onClick={() => setProducts((current) => [...current, emptyProduct()])}
+            type="button"
+          >
+            新增商品
+          </button>
+          <div className="flex items-center gap-3">
+            {message ? (
+              <span className="text-sm font-medium text-[#6b6257]">
+                {message}
+              </span>
+            ) : null}
+            <button
+              className="h-11 rounded-md bg-[#202124] px-5 text-sm font-semibold text-white disabled:bg-[#b8b2a7]"
+              disabled={isSaving}
+              onClick={saveProducts}
+              type="button"
+            >
+              {isSaving ? "保存中" : "保存配置"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
