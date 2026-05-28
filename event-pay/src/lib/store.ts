@@ -182,6 +182,21 @@ export async function readOrders() {
   return readJsonFile<DemoOrder[]>(ordersPath, []);
 }
 
+export async function readPaidOrderItems() {
+  if (isSupabaseEnabled()) {
+    const rows = await supabaseJson<Array<Pick<OrderRow, "items">>>(
+      "/rest/v1/orders?select=items&status=eq.paid",
+    );
+
+    return rows.flatMap((row) => row.items);
+  }
+
+  const orders = await readOrders();
+  return orders
+    .filter((order) => order.status === "paid")
+    .flatMap((order) => order.items);
+}
+
 export async function writeOrders(orders: DemoOrder[]) {
   if (isSupabaseEnabled()) {
     if (orders.length) {

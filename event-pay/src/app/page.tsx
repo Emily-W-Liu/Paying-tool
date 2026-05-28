@@ -9,14 +9,21 @@ export default function Home() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
 
   useEffect(() => {
     const timer = window.setTimeout(async () => {
-      const productsResponse = await fetch("/api/products?view=public");
-      const productsData = (await productsResponse.json()) as {
-        products: Product[];
-      };
-      setProducts(productsData.products);
+      try {
+        const productsResponse = await fetch("/api/products?view=public", {
+          cache: "no-store",
+        });
+        const productsData = (await productsResponse.json()) as {
+          products: Product[];
+        };
+        setProducts(productsResponse.ok ? productsData.products : []);
+      } finally {
+        setIsLoadingProducts(false);
+      }
     }, 0);
 
     return () => window.clearTimeout(timer);
@@ -75,7 +82,11 @@ export default function Home() {
       </section>
 
       <section className="flex-1 space-y-3 px-4 pb-32">
-        {products.length ? products.map((product) => {
+        {isLoadingProducts ? (
+          <p className="rounded-lg border border-[#e1ddd4] bg-white p-4 text-sm text-[#6b6257]">
+            正在加载商品...
+          </p>
+        ) : products.length ? products.map((product) => {
           const quantity = quantities[product.id] ?? 0;
           const remaining = product.stock;
           const soldOut = remaining === 0;

@@ -26,24 +26,69 @@ const statusCopy = {
 function StatusContent() {
   const searchParams = useSearchParams();
   const [order, setOrder] = useState<DemoOrder | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState("");
 
   useEffect(() => {
-    const timer = window.setTimeout(async () => {
+    let isActive = true;
+
+    async function loadOrder() {
       const orderId =
         searchParams.get("order") ??
         window.localStorage.getItem("event-pay-current-order");
       if (!orderId) {
-        setOrder(null);
+        if (isActive) {
+          setOrder(null);
+          setIsLoading(false);
+        }
         return;
       }
 
-      const response = await fetch(`/api/orders/${orderId}`);
-      const data = (await response.json()) as { order?: DemoOrder };
-      setOrder(response.ok && data.order ? data.order : null);
-    }, 0);
+      let nextOrder: DemoOrder | null = null;
 
-    return () => window.clearTimeout(timer);
+      try {
+        const response = await fetch(`/api/orders/${orderId}`, {
+          cache: "no-store",
+        });
+        const data = (await response.json()) as { order?: DemoOrder };
+        nextOrder = response.ok && data.order ? data.order : null;
+      } catch {
+        if (isActive) {
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      if (!isActive) return;
+      setOrder(nextOrder);
+      setIsLoading(false);
+      setLastUpdatedAt(new Date().toLocaleTimeString("zh-CN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      }));
+
+      if (nextOrder && nextOrder.status !== "pending" && intervalId) {
+        window.clearInterval(intervalId);
+      }
+    }
+
+    const intervalId = window.setInterval(loadOrder, 3000);
+    void loadOrder();
+
+    return () => {
+      isActive = false;
+      window.clearInterval(intervalId);
+    };
   }, [searchParams]);
+
+  if (isLoading) {
+    return (
+      <main className="mx-auto min-h-screen w-full max-w-2xl bg-[#f7f5ef] px-4 py-6">
+        <p className="text-sm text-[#6b6257]">正在读取订单状态...</p>
+      </main>
+    );
+  }
 
   if (!order) {
     return (
@@ -77,6 +122,11 @@ function StatusContent() {
           订单 {order.id}
         </h1>
         <p className="mt-3 text-sm leading-6 text-[#5f6368]">{copy.body}</p>
+        {order.status === "pending" ? (
+          <p className="mt-2 text-xs text-[#6b6257]">
+            页面会自动更新状态{lastUpdatedAt ? `，上次检查 ${lastUpdatedAt}` : ""}
+          </p>
+        ) : null}
 
         <div className="mt-6 space-y-3 border-t border-[#ede8df] pt-5">
           {order.items.map((item) => (

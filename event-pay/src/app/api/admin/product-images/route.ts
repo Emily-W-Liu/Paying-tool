@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { adminAuthError, isAdminAuthenticated } from "@/lib/admin-auth";
+import { readProducts, writeProducts } from "@/lib/store";
 import { saveProductImage } from "@/lib/uploads";
 
 export const runtime = "nodejs";
@@ -29,5 +30,21 @@ export async function POST(request: Request) {
     requestUrl: request.url,
   });
 
-  return NextResponse.json({ imageUrl: upload.publicUrl });
+  const products = await readProducts();
+  const nextProducts = products.map((product) =>
+    product.id === productId
+      ? {
+          ...product,
+          imageUrl: upload.publicUrl,
+        }
+      : product,
+  );
+
+  const persisted = nextProducts.some((product) => product.id === productId);
+
+  if (persisted) {
+    await writeProducts(nextProducts);
+  }
+
+  return NextResponse.json({ imageUrl: upload.publicUrl, persisted });
 }
