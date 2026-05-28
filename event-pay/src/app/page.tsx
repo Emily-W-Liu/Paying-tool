@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { CartItem, Product } from "@/lib/order-types";
 
@@ -62,7 +61,7 @@ export default function Home() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col bg-[#f7f5ef]">
       <section className="px-5 pb-4 pt-6">
-        <div className="flex items-start justify-between gap-4">
+        <div>
           <div>
             <p className="text-sm font-medium text-[#7b341e]">扫码下单</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-normal text-[#202124]">
@@ -72,12 +71,6 @@ export default function Home() {
               选择需要的内容和数量，提交后上传付款截图，商家确认后订单会更新为已支付。
             </p>
           </div>
-          <Link
-            className="shrink-0 rounded-md border border-[#d5d0c6] bg-white px-3 py-2 text-sm font-medium text-[#202124]"
-            href="/admin"
-          >
-            后台
-          </Link>
         </div>
       </section>
 

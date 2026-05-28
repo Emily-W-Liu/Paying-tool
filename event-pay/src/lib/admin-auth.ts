@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 
 const cookieName = "event-pay-admin";
-const oneWeek = 60 * 60 * 24 * 7;
+const sessionMaxAge = 60 * 60 * 24 * 30;
 
 function getAdminPassword() {
   if (process.env.ADMIN_PASSWORD) {
@@ -60,11 +60,20 @@ export async function setAdminSession() {
   const cookieStore = await cookies();
   cookieStore.set(cookieName, createSessionValue(), {
     httpOnly: true,
-    maxAge: oneWeek,
+    maxAge: sessionMaxAge,
     path: "/",
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
   });
+}
+
+export async function refreshAdminSession() {
+  if (!(await isAdminAuthenticated())) {
+    return false;
+  }
+
+  await setAdminSession();
+  return true;
 }
 
 export async function clearAdminSession() {

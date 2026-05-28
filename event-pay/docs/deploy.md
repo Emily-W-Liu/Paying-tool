@@ -30,6 +30,22 @@ NEXT_PUBLIC_SITE_URL=https://your-vercel-domain.vercel.app
 
 `NEXT_PUBLIC_SITE_URL` 要在拿到正式域名后改成真实域名，否则飞书里的备用截图链接会指向本地。
 
+## 线上入口
+
+顾客商品页：
+
+```text
+https://paying-tool.vercel.app/
+```
+
+商家后台入口：
+
+```text
+https://paying-tool.vercel.app/merchant
+```
+
+顾客页不展示后台入口；商家请保存后台入口书签。后续如配置独立后台域名或子域名，可将该域名指向同一 Vercel 项目，并以 `/merchant` 作为后台入口。
+
 ## 上线后测试
 
 1. 打开公网商品页。
@@ -37,7 +53,7 @@ NEXT_PUBLIC_SITE_URL=https://your-vercel-domain.vercel.app
 3. 检查 Supabase `orders` 表是否新增记录。
 4. 检查 Supabase Storage 是否新增图片。
 5. 检查飞书多维表格是否新增记录和附件。
-6. 登录 `/admin`，点击确认付款。
+6. 登录 `/merchant`，点击确认付款。
 7. 检查飞书订单状态是否变成 `已完成`。
 
 ## 二维码
