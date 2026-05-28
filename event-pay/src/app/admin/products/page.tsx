@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Product } from "@/lib/order-types";
@@ -26,7 +26,9 @@ export default function ProductsAdminPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [uploadingImages, setUploadingImages] = useState<Record<string, boolean>>({});
+  const [previewImageUrls, setPreviewImageUrls] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
+  const previewObjectUrlsRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
     const timer = window.setTimeout(async () => {
@@ -48,6 +50,16 @@ export default function ProductsAdminPage() {
 
     return () => window.clearTimeout(timer);
   }, [router]);
+
+  useEffect(() => {
+    const previewObjectUrls = previewObjectUrlsRef.current;
+
+    return () => {
+      Object.values(previewObjectUrls).forEach((url) =>
+        URL.revokeObjectURL(url),
+      );
+    };
+  }, []);
 
   function updateProduct(productId: string, patch: Partial<Product>) {
     setProducts((current) =>
@@ -84,8 +96,18 @@ export default function ProductsAdminPage() {
   async function uploadProductImage(productId: string, file?: File) {
     if (!file) return;
 
+    const previousPreviewUrl = previewObjectUrlsRef.current[productId];
+    if (previousPreviewUrl) {
+      URL.revokeObjectURL(previousPreviewUrl);
+    }
+    const nextPreviewUrl = URL.createObjectURL(file);
+    previewObjectUrlsRef.current[productId] = nextPreviewUrl;
+    setPreviewImageUrls((current) => ({
+      ...current,
+      [productId]: nextPreviewUrl,
+    }));
     setUploadingImages((current) => ({ ...current, [productId]: true }));
-    setMessage("");
+    setMessage("商品图片上传中...");
 
     try {
       const formData = new FormData();
@@ -107,8 +129,22 @@ export default function ProductsAdminPage() {
       }
 
       updateProduct(productId, { imageUrl: data.imageUrl });
+      URL.revokeObjectURL(nextPreviewUrl);
+      delete previewObjectUrlsRef.current[productId];
+      setPreviewImageUrls((current) => {
+        const next = { ...current };
+        delete next[productId];
+        return next;
+      });
       setMessage(data.persisted ? "商品图片已上传并保存" : "商品图片已上传，记得保存配置");
     } catch (error) {
+      URL.revokeObjectURL(nextPreviewUrl);
+      delete previewObjectUrlsRef.current[productId];
+      setPreviewImageUrls((current) => {
+        const next = { ...current };
+        delete next[productId];
+        return next;
+      });
       setMessage(error instanceof Error ? error.message : "图片上传失败");
     } finally {
       setUploadingImages((current) => ({ ...current, [productId]: false }));
@@ -180,12 +216,12 @@ export default function ProductsAdminPage() {
               >
                 <div className="space-y-2">
                   <div className="flex aspect-square items-center justify-center overflow-hidden rounded-md border border-[#d8d2c7] bg-[#f7f5ef]">
-                    {product.imageUrl ? (
+                    {previewImageUrls[product.id] || product.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         alt={product.name}
                         className="h-full w-full object-cover"
-                        src={product.imageUrl}
+                        src={previewImageUrls[product.id] || product.imageUrl}
                       />
                     ) : (
                       <span className="px-3 text-center text-xs text-[#6b6257]">
@@ -199,9 +235,10 @@ export default function ProductsAdminPage() {
                       accept="image/*"
                       className="block w-full text-xs"
                       disabled={uploadingImages[product.id]}
-                      onChange={(event) =>
-                        uploadProductImage(product.id, event.target.files?.[0])
-                      }
+                      onChange={(event) => {
+                        uploadProductImage(product.id, event.target.files?.[0]);
+                        event.target.value = "";
+                      }}
                       type="file"
                     />
                   </label>
