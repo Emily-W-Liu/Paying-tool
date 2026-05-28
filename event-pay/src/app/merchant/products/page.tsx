@@ -136,6 +136,7 @@ function emptyProduct(): Product {
     description: "",
     price: 0,
     stock: 0,
+    stockLocations: {},
     accent: defaultAccent,
     imageUrl: "",
     isActive: true,
@@ -191,14 +192,67 @@ export default function ProductsAdminPage() {
     );
   }
 
+  function addProductLocation(productId: string) {
+    setProducts((current) =>
+      current.map((product) => {
+        if (product.id !== productId) return product;
+        const count = Object.keys(product.stockLocations).length;
+        const newName = `地区${count + 1}`;
+        return { ...product, stockLocations: { ...product.stockLocations, [newName]: 0 } };
+      }),
+    );
+  }
+
+  function removeProductLocation(productId: string, location: string) {
+    setProducts((current) =>
+      current.map((product) => {
+        if (product.id !== productId) return product;
+        const { [location]: _removed, ...rest } = product.stockLocations;
+        return { ...product, stockLocations: rest };
+      }),
+    );
+  }
+
+  function renameProductLocation(productId: string, oldName: string, newName: string) {
+    setProducts((current) =>
+      current.map((product) => {
+        if (product.id !== productId) return product;
+        const entries = Object.entries(product.stockLocations).map(([k, v]) =>
+          k === oldName ? [newName, v] : [k, v],
+        );
+        return { ...product, stockLocations: Object.fromEntries(entries) };
+      }),
+    );
+  }
+
+  function updateLocationStock(productId: string, location: string, stock: number) {
+    setProducts((current) =>
+      current.map((product) => {
+        if (product.id !== productId) return product;
+        return {
+          ...product,
+          stockLocations: { ...product.stockLocations, [location]: Math.max(0, stock) },
+        };
+      }),
+    );
+  }
+
   async function saveProducts() {
     setIsSaving(true);
     setMessage("");
 
+    // Keep stock field in sync with sum of location stocks
+    const productsToSave = products.map((product) => {
+      const locationEntries = Object.values(product.stockLocations);
+      return locationEntries.length > 0
+        ? { ...product, stock: locationEntries.reduce((sum, s) => sum + s, 0) }
+        : product;
+    });
+
     const response = await fetch("/api/products", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ products }),
+      body: JSON.stringify({ products: productsToSave }),
     });
     const data = (await response.json()) as {
       products?: Product[];
@@ -324,18 +378,18 @@ export default function ProductsAdminPage() {
         </div>
 
         <section className="mt-6 overflow-hidden rounded-lg border border-[#e1ddd4] bg-white">
-          <div className="grid gap-3 border-b border-[#ede8df] p-4 md:grid-cols-[140px_1fr_120px_120px_120px]">
+          <div className="grid gap-3 border-b border-[#ede8df] p-4 md:grid-cols-[140px_1fr_100px_1fr_120px]">
             <span className="text-sm font-semibold text-[#6b6257]">图片</span>
             <span className="text-sm font-semibold text-[#6b6257]">商品</span>
             <span className="text-sm font-semibold text-[#6b6257]">价格</span>
-            <span className="text-sm font-semibold text-[#6b6257]">库存</span>
+            <span className="text-sm font-semibold text-[#6b6257]">地区库存</span>
             <span className="text-sm font-semibold text-[#6b6257]">状态</span>
           </div>
 
           <div className="divide-y divide-[#ede8df]">
             {products.map((product) => (
               <article
-                className="grid gap-3 p-4 md:grid-cols-[140px_1fr_120px_120px_120px]"
+                className="grid gap-3 p-4 md:grid-cols-[140px_1fr_100px_1fr_120px]"
                 key={product.id}
               >
                 <div className="space-y-2">
@@ -411,17 +465,46 @@ export default function ProductsAdminPage() {
                   value={product.price}
                 />
 
-                <input
-                  className="h-10 rounded-md border border-[#d8d2c7] px-3 text-sm outline-none focus:border-[#202124]"
-                  min="0"
-                  onChange={(event) =>
-                    updateProduct(product.id, {
-                      stock: Number(event.target.value),
-                    })
-                  }
-                  type="number"
-                  value={product.stock}
-                />
+                <div className="space-y-1.5">
+                  {Object.entries(product.stockLocations).map(([loc, stock]) => (
+                    <div className="flex items-center gap-1.5" key={loc}>
+                      <input
+                        className="h-8 min-w-0 flex-1 rounded border border-[#d8d2c7] px-2 text-xs outline-none focus:border-[#202124]"
+                        onBlur={(event) => {
+                          const newName = event.target.value.trim();
+                          if (newName && newName !== loc) {
+                            renameProductLocation(product.id, loc, newName);
+                          }
+                        }}
+                        defaultValue={loc}
+                        placeholder="地区名"
+                      />
+                      <input
+                        className="h-8 w-14 rounded border border-[#d8d2c7] px-2 text-xs outline-none focus:border-[#202124]"
+                        min="0"
+                        onChange={(event) =>
+                          updateLocationStock(product.id, loc, Number(event.target.value))
+                        }
+                        type="number"
+                        value={stock}
+                      />
+                      <button
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-[#d5d0c6] text-sm text-[#b3261e]"
+                        onClick={() => removeProductLocation(product.id, loc)}
+                        type="button"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    className="h-8 w-full rounded border border-dashed border-[#b8b2a7] text-xs text-[#6b6257] hover:border-[#202124] hover:text-[#202124]"
+                    onClick={() => addProductLocation(product.id)}
+                    type="button"
+                  >
+                    + 添加地区
+                  </button>
+                </div>
 
                 <div className="space-y-2">
                   <label className="flex h-10 items-center gap-2 rounded-md border border-[#d8d2c7] px-3 text-sm">

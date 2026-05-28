@@ -390,6 +390,7 @@ export async function createFeishuTestRecord() {
     customerName: "飞书联调测试",
     contact: "test-contact",
     note: "这是一条由后台飞书联调页写入的测试记录，可以手动删除。",
+    location: "",
     items: [
       {
         id: "test",

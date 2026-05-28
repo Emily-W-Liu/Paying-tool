@@ -65,6 +65,19 @@ export default function AdminPage() {
       }, {});
   }, [orders]);
 
+  const paidByLocation = useMemo(() => {
+    const result: Record<string, Record<string, number>> = {};
+    for (const order of orders.filter((o) => o.status === "paid")) {
+      const loc = order.location ?? "";
+      if (!loc) continue;
+      result[loc] ??= {};
+      for (const item of order.items) {
+        result[loc][item.id] = (result[loc][item.id] ?? 0) + item.quantity;
+      }
+    }
+    return result;
+  }, [orders]);
+
   async function updateOrderStatus(orderId: string, status: OrderStatus) {
     setErrorMessage("");
     setUpdatingOrderIds((current) => ({ ...current, [orderId]: true }));
@@ -156,6 +169,8 @@ export default function AdminPage() {
             const stockWidth = product.stock
               ? Math.max((remaining / product.stock) * 100, 0)
               : 0;
+            const locationEntries = Object.entries(product.stockLocations ?? {});
+
             return (
               <article
                 className="rounded-lg border border-[#e1ddd4] bg-white p-4"
@@ -166,20 +181,44 @@ export default function AdminPage() {
                   style={{ width: `${stockWidth}%` }}
                 />
                 <h2 className="font-semibold">{product.name}</h2>
-                <dl className="mt-4 grid grid-cols-3 gap-2 text-sm">
-                  <div>
-                    <dt className="text-[#6b6257]">初始</dt>
-                    <dd className="mt-1 font-semibold">{product.stock}</dd>
+                {locationEntries.length > 0 ? (
+                  <div className="mt-4 space-y-2">
+                    {locationEntries.map(([loc, locStock]) => {
+                      const locPaid = paidByLocation[loc]?.[product.id] ?? 0;
+                      const locRemaining = Math.max(locStock - locPaid, 0);
+                      const locWidth = locStock ? Math.max((locRemaining / locStock) * 100, 0) : 0;
+                      return (
+                        <div key={loc}>
+                          <div className="flex justify-between text-xs text-[#6b6257]">
+                            <span>{loc}</span>
+                            <span>{locRemaining} / {locStock}</span>
+                          </div>
+                          <div className="mt-1 h-1.5 w-full rounded-full bg-[#f0ece4]">
+                            <div
+                              className={`h-1.5 rounded-full ${product.accent}`}
+                              style={{ width: `${locWidth}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div>
-                    <dt className="text-[#6b6257]">已支付</dt>
-                    <dd className="mt-1 font-semibold">{paid}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-[#6b6257]">剩余</dt>
-                    <dd className="mt-1 font-semibold">{remaining}</dd>
-                  </div>
-                </dl>
+                ) : (
+                  <dl className="mt-4 grid grid-cols-3 gap-2 text-sm">
+                    <div>
+                      <dt className="text-[#6b6257]">初始</dt>
+                      <dd className="mt-1 font-semibold">{product.stock}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[#6b6257]">已支付</dt>
+                      <dd className="mt-1 font-semibold">{paid}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[#6b6257]">剩余</dt>
+                      <dd className="mt-1 font-semibold">{remaining}</dd>
+                    </div>
+                  </dl>
+                )}
               </article>
             );
           })}
@@ -216,6 +255,7 @@ export default function AdminPage() {
                     </div>
                     <p className="mt-2 text-sm text-[#6b6257]">
                       {order.customerName} · {order.contact}
+                      {order.location ? ` · ${order.location}` : ""}
                     </p>
                     <div className="mt-3 space-y-1 text-sm">
                       {order.items.map((item) => (

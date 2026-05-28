@@ -15,20 +15,40 @@ export async function GET(request: Request) {
   const products = await readProducts();
 
   if (view === "public") {
-    const paidItems = await readPaidOrderItems();
-    const paidCounts = paidItems.reduce<Record<string, number>>((counts, item) => {
-      counts[item.id] = (counts[item.id] ?? 0) + item.quantity;
-      return counts;
-    }, {});
+    const paidOrders = await readPaidOrderItems();
+
+    const paidByLocation: Record<string, Record<string, number>> = {};
+    const paidTotal: Record<string, number> = {};
+    for (const { items, location } of paidOrders) {
+      for (const item of items) {
+        paidTotal[item.id] = (paidTotal[item.id] ?? 0) + item.quantity;
+        if (location) {
+          paidByLocation[location] ??= {};
+          paidByLocation[location][item.id] =
+            (paidByLocation[location][item.id] ?? 0) + item.quantity;
+        }
+      }
+    }
 
     return NextResponse.json(
       {
         products: products
           .filter((product) => product.isActive)
-          .map((product) => ({
-            ...product,
-            stock: Math.max(product.stock - (paidCounts[product.id] ?? 0), 0),
-          })),
+          .map((product) => {
+            const hasLocations = Object.keys(product.stockLocations).length > 0;
+            return {
+              ...product,
+              stock: Math.max(product.stock - (paidTotal[product.id] ?? 0), 0),
+              stockLocations: hasLocations
+                ? Object.fromEntries(
+                    Object.entries(product.stockLocations).map(([loc, locStock]) => [
+                      loc,
+                      Math.max(locStock - (paidByLocation[loc]?.[product.id] ?? 0), 0),
+                    ]),
+                  )
+                : {},
+            };
+          }),
       },
       { headers: noStoreHeaders },
     );

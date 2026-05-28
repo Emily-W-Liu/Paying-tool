@@ -10,6 +10,7 @@ type ProductRow = {
   description: string;
   price: number;
   stock: number;
+  stock_locations: Record<string, number>;
   accent: string;
   image_url?: string | null;
   is_active: boolean;
@@ -21,6 +22,7 @@ type OrderRow = {
   customer_name: string;
   contact: string;
   note: string;
+  location: string;
   items: CartItem[];
   total: number;
   screenshot_name: string;
@@ -46,6 +48,7 @@ function toProduct(row: ProductRow): Product {
     description: row.description,
     price: Number(row.price),
     stock: Number(row.stock),
+    stockLocations: row.stock_locations ?? {},
     accent: row.accent,
     imageUrl: row.image_url ?? "",
     isActive: row.is_active,
@@ -59,6 +62,7 @@ function toProductRow(product: Product): ProductRow {
     description: product.description,
     price: product.price,
     stock: product.stock,
+    stock_locations: product.stockLocations ?? {},
     accent: product.accent,
     image_url: product.imageUrl ?? "",
     is_active: product.isActive,
@@ -72,6 +76,7 @@ function toOrder(row: OrderRow): DemoOrder {
     customerName: row.customer_name,
     contact: row.contact,
     note: row.note,
+    location: row.location ?? "",
     items: row.items,
     total: Number(row.total),
     screenshotName: row.screenshot_name,
@@ -90,6 +95,7 @@ function toOrderRow(order: DemoOrder): OrderRow {
     customer_name: order.customerName,
     contact: order.contact,
     note: order.note,
+    location: order.location ?? "",
     items: order.items,
     total: order.total,
     screenshot_name: order.screenshotName,
@@ -184,17 +190,17 @@ export async function readOrders() {
 
 export async function readPaidOrderItems() {
   if (isSupabaseEnabled()) {
-    const rows = await supabaseJson<Array<Pick<OrderRow, "items">>>(
-      "/rest/v1/orders?select=items&status=eq.paid",
+    const rows = await supabaseJson<Array<Pick<OrderRow, "items" | "location">>>(
+      "/rest/v1/orders?select=items,location&status=eq.paid",
     );
 
-    return rows.flatMap((row) => row.items);
+    return rows.map((row) => ({ items: row.items, location: row.location ?? "" }));
   }
 
   const orders = await readOrders();
   return orders
     .filter((order) => order.status === "paid")
-    .flatMap((order) => order.items);
+    .map((order) => ({ items: order.items, location: order.location ?? "" }));
 }
 
 export async function writeOrders(orders: DemoOrder[]) {

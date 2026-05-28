@@ -8,6 +8,7 @@ import type { CartItem, DemoOrder } from "@/lib/order-types";
 export default function SubmitPage() {
   const router = useRouter();
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [location, setLocation] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [contact, setContact] = useState("");
   const [note, setNote] = useState("");
@@ -18,9 +19,11 @@ export default function SubmitPage() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const savedCart = window.localStorage.getItem("event-pay-cart");
+      const savedLocation = window.localStorage.getItem("event-pay-location") ?? "";
       if (savedCart) {
         setCart(JSON.parse(savedCart));
       }
+      setLocation(savedLocation);
     }, 0);
 
     return () => window.clearTimeout(timer);
@@ -43,6 +46,7 @@ export default function SubmitPage() {
       formData.append("customerName", customerName);
       formData.append("contact", contact);
       formData.append("note", note);
+      formData.append("location", location);
       formData.append("cart", JSON.stringify(cart));
       formData.append("screenshot", screenshot);
 
@@ -81,6 +85,12 @@ export default function SubmitPage() {
       <section className="mt-5 rounded-lg border border-[#e1ddd4] bg-white p-4">
         <h2 className="text-base font-semibold">订单明细</h2>
         <div className="mt-3 space-y-3">
+          {location ? (
+            <div className="flex justify-between gap-4 text-sm">
+              <span className="text-[#5f6368]">地区</span>
+              <span className="font-medium">{location}</span>
+            </div>
+          ) : null}
           {cart.length ? (
             cart.map((item) => (
               <div className="flex justify-between gap-4 text-sm" key={item.id}>

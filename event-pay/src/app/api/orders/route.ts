@@ -21,6 +21,7 @@ export async function POST(request: Request) {
   const customerName = String(formData.get("customerName") ?? "").trim();
   const contact = String(formData.get("contact") ?? "").trim();
   const note = String(formData.get("note") ?? "").trim();
+  const location = String(formData.get("location") ?? "").trim();
   const cartJson = String(formData.get("cart") ?? "[]");
   const screenshot = formData.get("screenshot");
 
@@ -42,13 +43,20 @@ export async function POST(request: Request) {
   const products = await readProducts();
   const activeProducts = products.filter((product) => product.isActive);
   const orders = await readOrders();
-  const paidCounts = orders
-    .filter((order) => order.status === "paid")
-    .flatMap((order) => order.items)
-    .reduce<Record<string, number>>((counts, item) => {
-      counts[item.id] = (counts[item.id] ?? 0) + item.quantity;
-      return counts;
-    }, {});
+  const paidOrders = orders.filter((order) => order.status === "paid");
+
+  const paidByLocation: Record<string, Record<string, number>> = {};
+  const paidTotal: Record<string, number> = {};
+  for (const order of paidOrders) {
+    const loc = order.location ?? "";
+    for (const item of order.items) {
+      paidTotal[item.id] = (paidTotal[item.id] ?? 0) + item.quantity;
+      if (loc) {
+        paidByLocation[loc] ??= {};
+        paidByLocation[loc][item.id] = (paidByLocation[loc][item.id] ?? 0) + item.quantity;
+      }
+    }
+  }
 
   const items: CartItem[] = [];
 
@@ -62,7 +70,21 @@ export async function POST(request: Request) {
     }
 
     const quantity = Math.max(Number(cartItem.quantity) || 0, 0);
-    const remaining = Math.max(product.stock - (paidCounts[product.id] ?? 0), 0);
+    const hasLocations = Object.keys(product.stockLocations).length > 0;
+
+    let remaining: number;
+    if (hasLocations) {
+      if (!location || !(location in product.stockLocations)) {
+        return NextResponse.json(
+          { message: `请选择有效的地区` },
+          { status: 400 },
+        );
+      }
+      const locStock = product.stockLocations[location] ?? 0;
+      remaining = Math.max(locStock - (paidByLocation[location]?.[product.id] ?? 0), 0);
+    } else {
+      remaining = Math.max(product.stock - (paidTotal[product.id] ?? 0), 0);
+    }
 
     if (quantity <= 0 || quantity > remaining) {
       return NextResponse.json(
@@ -100,6 +122,7 @@ export async function POST(request: Request) {
     customerName,
     contact,
     note,
+    location,
     items,
     total,
     screenshotName: screenshot.name,

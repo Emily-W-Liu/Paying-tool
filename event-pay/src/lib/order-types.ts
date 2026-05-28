@@ -13,6 +13,7 @@ export type Product = {
   description: string;
   price: number;
   stock: number;
+  stockLocations: Record<string, number>;
   accent: string;
   imageUrl: string;
   isActive: boolean;
@@ -24,6 +25,7 @@ export type DemoOrder = {
   customerName: string;
   contact: string;
   note: string;
+  location: string;
   items: CartItem[];
   total: number;
   screenshotName: string;

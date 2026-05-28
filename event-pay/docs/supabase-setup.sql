@@ -77,3 +77,10 @@ on conflict (id) do nothing;
 
 -- Create a public bucket named payment-screenshots in Supabase Storage.
 -- Keep writes server-side via SUPABASE_SERVICE_ROLE_KEY.
+
+-- Migration: dual-location inventory (EMI-11)
+alter table public.products
+  add column if not exists stock_locations jsonb not null default '{}';
+
+alter table public.orders
+  add column if not exists location text not null default '';
