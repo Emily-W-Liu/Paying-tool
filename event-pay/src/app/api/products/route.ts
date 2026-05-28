@@ -12,10 +12,12 @@ const noStoreHeaders = {
 
 export async function GET(request: Request) {
   const view = new URL(request.url).searchParams.get("view");
-  const products = await readProducts();
 
   if (view === "public") {
-    const paidOrders = await readPaidOrderItems();
+    const [products, paidOrders] = await Promise.all([
+      readProducts(),
+      readPaidOrderItems(),
+    ]);
 
     const paidByLocation: Record<string, Record<string, number>> = {};
     const paidTotal: Record<string, number> = {};
@@ -54,6 +56,7 @@ export async function GET(request: Request) {
     );
   }
 
+  const products = await readProducts();
   return NextResponse.json({ products }, { headers: noStoreHeaders });
 }
 
