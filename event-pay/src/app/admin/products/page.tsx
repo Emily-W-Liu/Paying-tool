@@ -5,13 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Product } from "@/lib/order-types";
 
-const accentOptions = [
-  { label: "珊瑚红", value: "bg-[#f66f4d]" },
-  { label: "湖蓝", value: "bg-[#3b82f6]" },
-  { label: "松绿", value: "bg-[#16a34a]" },
-  { label: "金黄", value: "bg-[#d97706]" },
-  { label: "石墨", value: "bg-[#374151]" },
-];
+const defaultAccent = "bg-[#f66f4d]";
 
 function emptyProduct(): Product {
   return {
@@ -20,7 +14,7 @@ function emptyProduct(): Product {
     description: "",
     price: 0,
     stock: 0,
-    accent: accentOptions[0].value,
+    accent: defaultAccent,
     imageUrl: "",
     isActive: true,
   };
@@ -104,6 +98,7 @@ export default function ProductsAdminPage() {
       });
       const data = (await response.json()) as {
         imageUrl?: string;
+        persisted?: boolean;
         message?: string;
       };
 
@@ -112,7 +107,7 @@ export default function ProductsAdminPage() {
       }
 
       updateProduct(productId, { imageUrl: data.imageUrl });
-      setMessage("商品图片已上传，记得保存配置");
+      setMessage(data.persisted ? "商品图片已上传并保存" : "商品图片已上传，记得保存配置");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "图片上传失败");
     } finally {
@@ -169,19 +164,18 @@ export default function ProductsAdminPage() {
         </div>
 
         <section className="mt-6 overflow-hidden rounded-lg border border-[#e1ddd4] bg-white">
-          <div className="grid gap-3 border-b border-[#ede8df] p-4 md:grid-cols-[140px_1fr_120px_120px_140px_120px]">
+          <div className="grid gap-3 border-b border-[#ede8df] p-4 md:grid-cols-[140px_1fr_120px_120px_120px]">
             <span className="text-sm font-semibold text-[#6b6257]">图片</span>
             <span className="text-sm font-semibold text-[#6b6257]">商品</span>
             <span className="text-sm font-semibold text-[#6b6257]">价格</span>
             <span className="text-sm font-semibold text-[#6b6257]">库存</span>
-            <span className="text-sm font-semibold text-[#6b6257]">颜色</span>
             <span className="text-sm font-semibold text-[#6b6257]">状态</span>
           </div>
 
           <div className="divide-y divide-[#ede8df]">
             {products.map((product) => (
               <article
-                className="grid gap-3 p-4 md:grid-cols-[140px_1fr_120px_120px_140px_120px]"
+                className="grid gap-3 p-4 md:grid-cols-[140px_1fr_120px_120px_120px]"
                 key={product.id}
               >
                 <div className="space-y-2">
@@ -267,20 +261,6 @@ export default function ProductsAdminPage() {
                   type="number"
                   value={product.stock}
                 />
-
-                <select
-                  className="h-10 rounded-md border border-[#d8d2c7] bg-white px-3 text-sm outline-none focus:border-[#202124]"
-                  onChange={(event) =>
-                    updateProduct(product.id, { accent: event.target.value })
-                  }
-                  value={product.accent}
-                >
-                  {accentOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
 
                 <div className="space-y-2">
                   <label className="flex h-10 items-center gap-2 rounded-md border border-[#d8d2c7] px-3 text-sm">
