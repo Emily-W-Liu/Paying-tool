@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { Product } from "@/lib/order-types";
+import type { DemoOrder, Product } from "@/lib/order-types";
 
 const defaultAccent = "bg-[#f66f4d]";
 const maxUploadBytes = 3 * 1024 * 1024;
@@ -146,11 +146,14 @@ function emptyProduct(): Product {
 export default function ProductsAdminPage() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
+  const [orders, setOrders] = useState<DemoOrder[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [uploadingImages, setUploadingImages] = useState<Record<string, boolean>>({});
   const [previewImageUrls, setPreviewImageUrls] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState<"success" | "error">("success");
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const previewObjectUrlsRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
@@ -165,9 +168,14 @@ export default function ProductsAdminPage() {
         return;
       }
 
-      const response = await fetch("/api/products");
-      const data = (await response.json()) as { products: Product[] };
-      setProducts(data.products);
+      const [productsResponse, ordersResponse] = await Promise.all([
+        fetch("/api/products"),
+        fetch("/api/orders"),
+      ]);
+      const productsData = (await productsResponse.json()) as { products: Product[] };
+      const ordersData = (await ordersResponse.json()) as { orders: DemoOrder[] };
+      setProducts(productsData.products);
+      setOrders(ordersData.orders ?? []);
       setIsLoading(false);
     }, 0);
 
@@ -183,6 +191,23 @@ export default function ProductsAdminPage() {
       );
     };
   }, []);
+
+  const orderedProductIds = useMemo(
+    () => new Set(orders.flatMap((o) => o.items.map((i) => i.id))),
+    [orders],
+  );
+
+  function validateProducts(list: Product[]): string | null {
+    for (const product of list) {
+      if (!product.name.trim()) return "商品名不能为空";
+      if (product.price < 0) return "价格不能为负数";
+      for (const [loc, stock] of Object.entries(product.stockLocations)) {
+        if (!loc.trim()) return `「${product.name}」有地区名为空，请填写后再保存`;
+        if (stock < 0) return `「${product.name}」库存不能为负数`;
+      }
+    }
+    return null;
+  }
 
   function updateProduct(productId: string, patch: Partial<Product>) {
     setProducts((current) =>
@@ -238,6 +263,13 @@ export default function ProductsAdminPage() {
   }
 
   async function saveProducts() {
+    const validationError = validateProducts(products);
+    if (validationError) {
+      setMessage(validationError);
+      setMessageType("error");
+      return;
+    }
+
     setIsSaving(true);
     setMessage("");
 
@@ -262,8 +294,10 @@ export default function ProductsAdminPage() {
     if (response.ok && data.products) {
       setProducts(data.products);
       setMessage("商品配置已保存");
+      setMessageType("success");
     } else {
       setMessage(data.message ?? "保存失败");
+      setMessageType("error");
     }
 
     setIsSaving(false);
@@ -519,17 +553,78 @@ export default function ProductsAdminPage() {
                     />
                     上架
                   </label>
-                  <button
-                    className="h-10 w-full rounded-md border border-[#d5d0c6] text-sm font-semibold text-[#b3261e]"
-                    onClick={() =>
-                      setProducts((current) =>
-                        current.filter((item) => item.id !== product.id),
-                      )
-                    }
-                    type="button"
-                  >
-                    删除
-                  </button>
+
+                  {pendingDeleteId === product.id ? (
+                    <div className="rounded-md border border-[#fde7e9] bg-[#fff5f5] p-2 text-xs">
+                      {orderedProductIds.has(product.id) ? (
+                        <>
+                          <p className="mb-2 font-medium text-[#b3261e]">此商品已有订单，不建议删除</p>
+                          <div className="flex gap-1.5">
+                            <button
+                              className="flex-1 rounded bg-[#202124] px-2 py-1.5 text-xs font-semibold text-white"
+                              onClick={() => {
+                                updateProduct(product.id, { isActive: false });
+                                setPendingDeleteId(null);
+                                setMessage("已改为下架");
+                                setMessageType("success");
+                              }}
+                              type="button"
+                            >
+                              改为下架
+                            </button>
+                            <button
+                              className="flex-1 rounded border border-[#d5d0c6] px-2 py-1.5 text-xs font-semibold text-[#b3261e]"
+                              onClick={() => {
+                                setProducts((current) => current.filter((item) => item.id !== product.id));
+                                setPendingDeleteId(null);
+                              }}
+                              type="button"
+                            >
+                              强制删除
+                            </button>
+                          </div>
+                          <button
+                            className="mt-1.5 w-full text-center text-xs text-[#6b6257]"
+                            onClick={() => setPendingDeleteId(null)}
+                            type="button"
+                          >
+                            取消
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <p className="mb-2 font-medium text-[#b3261e]">确认删除「{product.name}」？</p>
+                          <div className="flex gap-1.5">
+                            <button
+                              className="flex-1 rounded bg-[#b3261e] px-2 py-1.5 text-xs font-semibold text-white"
+                              onClick={() => {
+                                setProducts((current) => current.filter((item) => item.id !== product.id));
+                                setPendingDeleteId(null);
+                              }}
+                              type="button"
+                            >
+                              确认删除
+                            </button>
+                            <button
+                              className="flex-1 rounded border border-[#d5d0c6] px-2 py-1.5 text-xs font-semibold"
+                              onClick={() => setPendingDeleteId(null)}
+                              type="button"
+                            >
+                              取消
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      className="h-10 w-full rounded-md border border-[#d5d0c6] text-sm font-semibold text-[#b3261e]"
+                      onClick={() => setPendingDeleteId(product.id)}
+                      type="button"
+                    >
+                      删除
+                    </button>
+                  )}
                 </div>
               </article>
             ))}
@@ -546,7 +641,11 @@ export default function ProductsAdminPage() {
           </button>
           <div className="flex items-center gap-3">
             {message ? (
-              <span className="text-sm font-medium text-[#6b6257]">
+              <span
+                className={`text-sm font-medium ${
+                  messageType === "error" ? "text-[#b3261e]" : "text-[#116329]"
+                }`}
+              >
                 {message}
               </span>
             ) : null}
