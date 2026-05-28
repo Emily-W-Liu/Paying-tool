@@ -11,6 +11,7 @@ type ProductRow = {
   price: number;
   stock: number;
   accent: string;
+  image_url?: string | null;
   is_active: boolean;
 };
 
@@ -46,6 +47,7 @@ function toProduct(row: ProductRow): Product {
     price: Number(row.price),
     stock: Number(row.stock),
     accent: row.accent,
+    imageUrl: row.image_url ?? "",
     isActive: row.is_active,
   };
 }
@@ -58,6 +60,7 @@ function toProductRow(product: Product): ProductRow {
     price: product.price,
     stock: product.stock,
     accent: product.accent,
+    image_url: product.imageUrl ?? "",
     is_active: product.isActive,
   };
 }

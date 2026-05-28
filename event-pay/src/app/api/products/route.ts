@@ -48,6 +48,7 @@ export async function PUT(request: Request) {
     id: product.id || `product-${Date.now()}`,
     price: Number(product.price) || 0,
     stock: Math.max(Number(product.stock) || 0, 0),
+    imageUrl: typeof product.imageUrl === "string" ? product.imageUrl : "",
     isActive: Boolean(product.isActive),
   }));
 

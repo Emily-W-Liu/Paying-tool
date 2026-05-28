@@ -21,6 +21,7 @@ function emptyProduct(): Product {
     price: 0,
     stock: 0,
     accent: accentOptions[0].value,
+    imageUrl: "",
     isActive: true,
   };
 }
@@ -30,6 +31,7 @@ export default function ProductsAdminPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [uploadingImages, setUploadingImages] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -85,6 +87,39 @@ export default function ProductsAdminPage() {
     setIsSaving(false);
   }
 
+  async function uploadProductImage(productId: string, file?: File) {
+    if (!file) return;
+
+    setUploadingImages((current) => ({ ...current, [productId]: true }));
+    setMessage("");
+
+    try {
+      const formData = new FormData();
+      formData.append("productId", productId);
+      formData.append("image", file);
+
+      const response = await fetch("/api/admin/product-images", {
+        method: "POST",
+        body: formData,
+      });
+      const data = (await response.json()) as {
+        imageUrl?: string;
+        message?: string;
+      };
+
+      if (!response.ok || !data.imageUrl) {
+        throw new Error(data.message ?? "图片上传失败");
+      }
+
+      updateProduct(productId, { imageUrl: data.imageUrl });
+      setMessage("商品图片已上传，记得保存配置");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "图片上传失败");
+    } finally {
+      setUploadingImages((current) => ({ ...current, [productId]: false }));
+    }
+  }
+
   async function logout() {
     await fetch("/api/admin/logout", { method: "POST" });
     router.replace("/admin/login");
@@ -134,7 +169,8 @@ export default function ProductsAdminPage() {
         </div>
 
         <section className="mt-6 overflow-hidden rounded-lg border border-[#e1ddd4] bg-white">
-          <div className="grid gap-3 border-b border-[#ede8df] p-4 md:grid-cols-[1fr_120px_120px_140px_120px]">
+          <div className="grid gap-3 border-b border-[#ede8df] p-4 md:grid-cols-[140px_1fr_120px_120px_140px_120px]">
+            <span className="text-sm font-semibold text-[#6b6257]">图片</span>
             <span className="text-sm font-semibold text-[#6b6257]">商品</span>
             <span className="text-sm font-semibold text-[#6b6257]">价格</span>
             <span className="text-sm font-semibold text-[#6b6257]">库存</span>
@@ -145,9 +181,50 @@ export default function ProductsAdminPage() {
           <div className="divide-y divide-[#ede8df]">
             {products.map((product) => (
               <article
-                className="grid gap-3 p-4 md:grid-cols-[1fr_120px_120px_140px_120px]"
+                className="grid gap-3 p-4 md:grid-cols-[140px_1fr_120px_120px_140px_120px]"
                 key={product.id}
               >
+                <div className="space-y-2">
+                  <div className="flex aspect-square items-center justify-center overflow-hidden rounded-md border border-[#d8d2c7] bg-[#f7f5ef]">
+                    {product.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        alt={product.name}
+                        className="h-full w-full object-cover"
+                        src={product.imageUrl}
+                      />
+                    ) : (
+                      <span className="px-3 text-center text-xs text-[#6b6257]">
+                        暂无图片
+                      </span>
+                    )}
+                  </div>
+                  <label className="block">
+                    <span className="sr-only">上传商品图片</span>
+                    <input
+                      accept="image/*"
+                      className="block w-full text-xs"
+                      disabled={uploadingImages[product.id]}
+                      onChange={(event) =>
+                        uploadProductImage(product.id, event.target.files?.[0])
+                      }
+                      type="file"
+                    />
+                  </label>
+                  {product.imageUrl ? (
+                    <button
+                      className="h-9 w-full rounded-md border border-[#d5d0c6] text-xs font-semibold"
+                      onClick={() => updateProduct(product.id, { imageUrl: "" })}
+                      type="button"
+                    >
+                      移除图片
+                    </button>
+                  ) : null}
+                  {uploadingImages[product.id] ? (
+                    <p className="text-xs text-[#6b6257]">上传中...</p>
+                  ) : null}
+                </div>
+
                 <div className="space-y-2">
                   <input
                     className="h-10 w-full rounded-md border border-[#d8d2c7] px-3 text-sm font-semibold outline-none focus:border-[#202124]"
@@ -251,7 +328,7 @@ export default function ProductsAdminPage() {
             ) : null}
             <button
               className="h-11 rounded-md bg-[#202124] px-5 text-sm font-semibold text-white disabled:bg-[#b8b2a7]"
-              disabled={isSaving}
+              disabled={isSaving || Object.values(uploadingImages).some(Boolean)}
               onClick={saveProducts}
               type="button"
             >

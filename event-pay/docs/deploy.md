@@ -42,4 +42,14 @@ NEXT_PUBLIC_SITE_URL=https://your-vercel-domain.vercel.app
 
 ## 二维码
 
-公网商品页 URL 确认后，用任意二维码生成工具生成指向该 URL 的二维码即可。
+当前活动商品页：
+
+```text
+https://paying-tool.vercel.app/
+```
+
+二维码文件：
+
+```text
+public/paying-tool-shop-qr.png
+```

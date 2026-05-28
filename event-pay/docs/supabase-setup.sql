@@ -5,9 +5,13 @@ create table if not exists public.products (
   price numeric not null default 0,
   stock integer not null default 0,
   accent text not null default 'bg-[#f66f4d]',
+  image_url text not null default '',
   is_active boolean not null default true,
   created_at timestamptz not null default now()
 );
+
+alter table public.products
+  add column if not exists image_url text not null default '';
 
 create table if not exists public.orders (
   id text primary key,
@@ -35,6 +39,7 @@ insert into public.products (
   price,
   stock,
   accent,
+  image_url,
   is_active
 )
 values
@@ -45,6 +50,7 @@ values
     68,
     45,
     'bg-[#f66f4d]',
+    '',
     true
   ),
   (
@@ -54,6 +60,7 @@ values
     39,
     18,
     'bg-[#3b82f6]',
+    '',
     true
   ),
   (
@@ -63,6 +70,7 @@ values
     26,
     0,
     'bg-[#16a34a]',
+    '',
     true
   )
 on conflict (id) do nothing;

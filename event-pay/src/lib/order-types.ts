@@ -14,6 +14,7 @@ export type Product = {
   price: number;
   stock: number;
   accent: string;
+  imageUrl: string;
   isActive: boolean;
 };
 

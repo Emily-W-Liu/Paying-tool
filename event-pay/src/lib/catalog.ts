@@ -8,6 +8,7 @@ export const products: Product[] = [
     price: 68,
     stock: 45,
     accent: "bg-[#f66f4d]",
+    imageUrl: "",
     isActive: true,
   },
   {
@@ -17,6 +18,7 @@ export const products: Product[] = [
     price: 39,
     stock: 18,
     accent: "bg-[#3b82f6]",
+    imageUrl: "",
     isActive: true,
   },
   {
@@ -26,6 +28,7 @@ export const products: Product[] = [
     price: 26,
     stock: 0,
     accent: "bg-[#16a34a]",
+    imageUrl: "",
     isActive: true,
   },
 ];

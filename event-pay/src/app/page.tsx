@@ -85,11 +85,20 @@ export default function Home() {
               className="grid grid-cols-[72px_1fr] gap-4 rounded-lg border border-[#e1ddd4] bg-white p-4 shadow-sm"
               key={product.id}
             >
-              <div
-                className={`flex aspect-square items-end rounded-md ${product.accent} p-2 text-xs font-semibold text-white`}
-              >
-                ¥{product.price}
-              </div>
+              {product.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  alt={product.name}
+                  className="aspect-square w-full rounded-md border border-[#ede8df] object-cover"
+                  src={product.imageUrl}
+                />
+              ) : (
+                <div
+                  className={`flex aspect-square items-end rounded-md ${product.accent} p-2 text-xs font-semibold text-white`}
+                >
+                  ¥{product.price}
+                </div>
+              )}
               <div className="min-w-0">
                 <div className="flex items-start justify-between gap-3">
                   <div>
