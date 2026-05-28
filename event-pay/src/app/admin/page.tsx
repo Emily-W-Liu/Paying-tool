@@ -23,6 +23,7 @@ export default function AdminPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [errorMessage, setErrorMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [updatingOrderIds, setUpdatingOrderIds] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const timer = window.setTimeout(async () => {
@@ -66,24 +67,32 @@ export default function AdminPage() {
 
   async function updateOrderStatus(orderId: string, status: OrderStatus) {
     setErrorMessage("");
-    const response = await fetch(`/api/orders/${orderId}/status`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    const data = (await response.json()) as {
-      order?: DemoOrder;
-      message?: string;
-    };
+    setUpdatingOrderIds((current) => ({ ...current, [orderId]: true }));
 
-    if (!response.ok || !data.order) {
-      setErrorMessage(data.message ?? "订单状态更新失败");
-      return;
+    try {
+      const response = await fetch(`/api/orders/${orderId}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      const data = (await response.json()) as {
+        order?: DemoOrder;
+        message?: string;
+      };
+
+      if (!response.ok || !data.order) {
+        setErrorMessage(data.message ?? "订单状态更新失败");
+        return;
+      }
+
+      setOrders((current) =>
+        current.map((order) => (order.id === orderId ? data.order! : order)),
+      );
+    } catch {
+      setErrorMessage("订单状态更新失败，请稍后重试");
+    } finally {
+      setUpdatingOrderIds((current) => ({ ...current, [orderId]: false }));
     }
-
-    setOrders((current) =>
-      current.map((order) => (order.id === orderId ? data.order! : order)),
-    );
   }
 
   async function logout() {
@@ -191,8 +200,11 @@ export default function AdminPage() {
 
           <div className="divide-y divide-[#ede8df]">
             {orders.length ? (
-              orders.map((order) => (
-                <article className="grid gap-4 p-4 md:grid-cols-[1fr_180px]" key={order.id}>
+              orders.map((order) => {
+                const isUpdating = Boolean(updatingOrderIds[order.id]);
+
+                return (
+                  <article className="grid gap-4 p-4 md:grid-cols-[1fr_180px]" key={order.id}>
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-semibold">{order.id}</h3>
@@ -236,17 +248,19 @@ export default function AdminPage() {
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           className="h-10 rounded-md bg-[#116329] text-sm font-semibold text-white"
+                          disabled={isUpdating}
                           onClick={() => updateOrderStatus(order.id, "paid")}
                           type="button"
                         >
-                          确认付款
+                          {isUpdating ? "处理中" : "确认付款"}
                         </button>
                         <button
                           className="h-10 rounded-md border border-[#d5d0c6] text-sm font-semibold"
+                          disabled={isUpdating}
                           onClick={() => updateOrderStatus(order.id, "rejected")}
                           type="button"
                         >
-                          驳回
+                          {isUpdating ? "处理中" : "驳回"}
                         </button>
                       </div>
                     ) : (
@@ -260,7 +274,8 @@ export default function AdminPage() {
                     )}
                   </div>
                 </article>
-              ))
+                );
+              })
             ) : (
               <p className="p-4 text-sm text-[#6b6257]">
                 还没有订单，先从商品页提交一单试试看。

@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { adminAuthError, isAdminAuthenticated } from "@/lib/admin-auth";
 import { updateFeishuOrderRecord } from "@/lib/feishu";
 import type { OrderStatus } from "@/lib/order-types";
-import { readOrders, writeOrders } from "@/lib/store";
+import { readOrders, upsertOrder } from "@/lib/store";
 
 export const runtime = "nodejs";
 
@@ -31,15 +31,24 @@ export async function PUT(
   }
 
   const updatedOrder = { ...order, status: body.status };
-  const sync = await updateFeishuOrderRecord(updatedOrder);
   const savedOrder = {
     ...updatedOrder,
-    feishuRecordId: sync.recordId ?? updatedOrder.feishuRecordId,
-    feishuSyncStatus: sync.status,
-    feishuSyncMessage: sync.message,
+    feishuSyncStatus: undefined,
+    feishuSyncMessage: "飞书同步进行中",
   };
-  const nextOrders = orders.map((item) => (item.id === id ? savedOrder : item));
 
-  await writeOrders(nextOrders);
+  await upsertOrder(savedOrder);
+
+  after(async () => {
+    const sync = await updateFeishuOrderRecord(updatedOrder);
+
+    await upsertOrder({
+      ...savedOrder,
+      feishuRecordId: sync.recordId ?? updatedOrder.feishuRecordId,
+      feishuSyncStatus: sync.status,
+      feishuSyncMessage: sync.message,
+    });
+  });
+
   return NextResponse.json({ order: savedOrder });
 }

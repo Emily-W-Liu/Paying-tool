@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { adminAuthError, isAdminAuthenticated } from "@/lib/admin-auth";
 import { createFeishuOrderRecord } from "@/lib/feishu";
 import type { CartItem, DemoOrder } from "@/lib/order-types";
@@ -107,18 +107,28 @@ export async function POST(request: Request) {
     status: "pending",
   };
 
-  const sync = await createFeishuOrderRecord(order, {
-    bytes,
-    fileName: screenshot.name,
-    mimeType: screenshot.type || "image/png",
-  });
   const savedOrder: DemoOrder = {
     ...order,
-    feishuRecordId: sync.recordId,
-    feishuSyncStatus: sync.status,
-    feishuSyncMessage: sync.message,
+    feishuSyncStatus: undefined,
+    feishuSyncMessage: "飞书同步进行中",
   };
 
   await upsertOrder(savedOrder);
+
+  after(async () => {
+    const sync = await createFeishuOrderRecord(order, {
+      bytes,
+      fileName: screenshot.name,
+      mimeType: screenshot.type || "image/png",
+    });
+
+    await upsertOrder({
+      ...savedOrder,
+      feishuRecordId: sync.recordId,
+      feishuSyncStatus: sync.status,
+      feishuSyncMessage: sync.message,
+    });
+  });
+
   return NextResponse.json({ order: savedOrder }, { status: 201 });
 }

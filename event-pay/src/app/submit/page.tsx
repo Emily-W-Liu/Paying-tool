@@ -151,7 +151,7 @@ export default function SubmitPage() {
           disabled={!cart.length || isSubmitting}
           type="submit"
         >
-          {isSubmitting ? "提交中" : "提交审核"}
+          {isSubmitting ? "正在上传并生成订单..." : "提交审核"}
         </button>
         {errorMessage ? (
           <p className="text-sm font-medium text-[#b3261e]">{errorMessage}</p>
