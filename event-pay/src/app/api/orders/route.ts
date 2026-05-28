@@ -17,141 +17,146 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const formData = await request.formData();
-  const customerName = String(formData.get("customerName") ?? "").trim();
-  const contact = String(formData.get("contact") ?? "").trim();
-  const note = String(formData.get("note") ?? "").trim();
-  const location = String(formData.get("location") ?? "").trim();
-  const cartJson = String(formData.get("cart") ?? "[]");
-  const screenshot = formData.get("screenshot");
-
-  if (!customerName || !contact || !(screenshot instanceof File)) {
-    return NextResponse.json({ message: "缺少用户信息或付款截图" }, { status: 400 });
-  }
-
-  let cart: CartItem[];
   try {
-    cart = JSON.parse(cartJson) as CartItem[];
-  } catch {
-    return NextResponse.json({ message: "购物车数据格式不正确" }, { status: 400 });
-  }
+    const formData = await request.formData();
+    const customerName = String(formData.get("customerName") ?? "").trim();
+    const contact = String(formData.get("contact") ?? "").trim();
+    const note = String(formData.get("note") ?? "").trim();
+    const location = String(formData.get("location") ?? "").trim();
+    const cartJson = String(formData.get("cart") ?? "[]");
+    const screenshot = formData.get("screenshot");
 
-  if (!Array.isArray(cart) || cart.length === 0) {
-    return NextResponse.json({ message: "购物车为空" }, { status: 400 });
-  }
+    if (!customerName || !contact || !(screenshot instanceof File)) {
+      return NextResponse.json({ message: "缺少用户信息或付款截图" }, { status: 400 });
+    }
 
-  const products = await readProducts();
-  const activeProducts = products.filter((product) => product.isActive);
-  const orders = await readOrders();
-  const paidOrders = orders.filter((order) => order.status === "paid");
+    let cart: CartItem[];
+    try {
+      cart = JSON.parse(cartJson) as CartItem[];
+    } catch {
+      return NextResponse.json({ message: "购物车数据格式不正确" }, { status: 400 });
+    }
 
-  const paidByLocation: Record<string, Record<string, number>> = {};
-  const paidTotal: Record<string, number> = {};
-  for (const order of paidOrders) {
-    const loc = order.location ?? "";
-    for (const item of order.items) {
-      paidTotal[item.id] = (paidTotal[item.id] ?? 0) + item.quantity;
-      if (loc) {
-        paidByLocation[loc] ??= {};
-        paidByLocation[loc][item.id] = (paidByLocation[loc][item.id] ?? 0) + item.quantity;
+    if (!Array.isArray(cart) || cart.length === 0) {
+      return NextResponse.json({ message: "购物车为空" }, { status: 400 });
+    }
+
+    const products = await readProducts();
+    const activeProducts = products.filter((product) => product.isActive);
+    const orders = await readOrders();
+    const paidOrders = orders.filter((order) => order.status === "paid");
+
+    const paidByLocation: Record<string, Record<string, number>> = {};
+    const paidTotal: Record<string, number> = {};
+    for (const order of paidOrders) {
+      const loc = order.location ?? "";
+      for (const item of order.items) {
+        paidTotal[item.id] = (paidTotal[item.id] ?? 0) + item.quantity;
+        if (loc) {
+          paidByLocation[loc] ??= {};
+          paidByLocation[loc][item.id] = (paidByLocation[loc][item.id] ?? 0) + item.quantity;
+        }
       }
     }
-  }
 
-  const items: CartItem[] = [];
+    const items: CartItem[] = [];
 
-  for (const cartItem of cart) {
-    const product = activeProducts.find((item) => item.id === cartItem.id);
-    if (!product) {
-      return NextResponse.json(
-        { message: `商品不存在或已下架：${cartItem.name}` },
-        { status: 400 },
-      );
-    }
-
-    const quantity = Math.max(Number(cartItem.quantity) || 0, 0);
-    const hasLocations = Object.keys(product.stockLocations).length > 0;
-
-    let remaining: number;
-    if (hasLocations) {
-      if (!location || !(location in product.stockLocations)) {
+    for (const cartItem of cart) {
+      const product = activeProducts.find((item) => item.id === cartItem.id);
+      if (!product) {
         return NextResponse.json(
-          { message: `请选择有效的地区` },
+          { message: `商品不存在或已下架：${cartItem.name}` },
           { status: 400 },
         );
       }
-      const locStock = product.stockLocations[location] ?? 0;
-      remaining = Math.max(locStock - (paidByLocation[location]?.[product.id] ?? 0), 0);
-    } else {
-      remaining = Math.max(product.stock - (paidTotal[product.id] ?? 0), 0);
+
+      const quantity = Math.max(Number(cartItem.quantity) || 0, 0);
+      const hasLocations = Object.keys(product.stockLocations).length > 0;
+
+      let remaining: number;
+      if (hasLocations) {
+        if (!location || !(location in product.stockLocations)) {
+          return NextResponse.json(
+            { message: `请选择有效的地区` },
+            { status: 400 },
+          );
+        }
+        const locStock = product.stockLocations[location] ?? 0;
+        remaining = Math.max(locStock - (paidByLocation[location]?.[product.id] ?? 0), 0);
+      } else {
+        remaining = Math.max(product.stock - (paidTotal[product.id] ?? 0), 0);
+      }
+
+      if (quantity <= 0 || quantity > remaining) {
+        return NextResponse.json(
+          { message: `${product.name} 库存不足` },
+          { status: 400 },
+        );
+      }
+
+      items.push({
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        quantity,
+      });
     }
 
-    if (quantity <= 0 || quantity > remaining) {
-      return NextResponse.json(
-        { message: `${product.name} 库存不足` },
-        { status: 400 },
-      );
+    if (items.some((item) => item.quantity <= 0)) {
+      return NextResponse.json({ message: "商品数量不正确" }, { status: 400 });
     }
 
-    items.push({
-      id: product.id,
-      name: product.name,
-      price: product.price,
-      quantity,
-    });
-  }
-
-  if (items.some((item) => item.quantity <= 0)) {
-    return NextResponse.json({ message: "商品数量不正确" }, { status: 400 });
-  }
-
-  const orderId = `EP${Date.now().toString().slice(-8)}`;
-  const bytes = Buffer.from(await screenshot.arrayBuffer());
-  const upload = await savePaymentScreenshot({
-    bytes,
-    fileName: screenshot.name,
-    mimeType: screenshot.type || "image/png",
-    orderId,
-    requestUrl: request.url,
-  });
-
-  const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const order: DemoOrder = {
-    id: orderId,
-    createdAt: new Date().toISOString(),
-    customerName,
-    contact,
-    note,
-    location,
-    items,
-    total,
-    screenshotName: screenshot.name,
-    screenshotUrl: upload.publicUrl,
-    status: "pending",
-  };
-
-  const savedOrder: DemoOrder = {
-    ...order,
-    feishuSyncStatus: undefined,
-    feishuSyncMessage: "飞书同步进行中",
-  };
-
-  await upsertOrder(savedOrder);
-
-  after(async () => {
-    const sync = await createFeishuOrderRecord(order, {
+    const orderId = `EP${Date.now().toString().slice(-8)}`;
+    const bytes = Buffer.from(await screenshot.arrayBuffer());
+    const upload = await savePaymentScreenshot({
       bytes,
       fileName: screenshot.name,
       mimeType: screenshot.type || "image/png",
+      orderId,
+      requestUrl: request.url,
     });
 
-    await upsertOrder({
-      ...savedOrder,
-      feishuRecordId: sync.recordId,
-      feishuSyncStatus: sync.status,
-      feishuSyncMessage: sync.message,
-    });
-  });
+    const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const order: DemoOrder = {
+      id: orderId,
+      createdAt: new Date().toISOString(),
+      customerName,
+      contact,
+      note,
+      location,
+      items,
+      total,
+      screenshotName: screenshot.name,
+      screenshotUrl: upload.publicUrl,
+      status: "pending",
+    };
 
-  return NextResponse.json({ order: savedOrder }, { status: 201 });
+    const savedOrder: DemoOrder = {
+      ...order,
+      feishuSyncStatus: undefined,
+      feishuSyncMessage: "飞书同步进行中",
+    };
+
+    await upsertOrder(savedOrder);
+
+    after(async () => {
+      const sync = await createFeishuOrderRecord(order, {
+        bytes,
+        fileName: screenshot.name,
+        mimeType: screenshot.type || "image/png",
+      });
+
+      await upsertOrder({
+        ...savedOrder,
+        feishuRecordId: sync.recordId,
+        feishuSyncStatus: sync.status,
+        feishuSyncMessage: sync.message,
+      });
+    });
+
+    return NextResponse.json({ order: savedOrder }, { status: 201 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "订单提交失败";
+    return NextResponse.json({ message }, { status: 500 });
+  }
 }

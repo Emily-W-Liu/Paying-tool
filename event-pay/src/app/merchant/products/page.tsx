@@ -3,111 +3,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import {
+  formatFileSize,
+  maxClientUploadBytes,
+  prepareImageUpload,
+} from "@/lib/client-image";
 import type { DemoOrder, Product } from "@/lib/order-types";
 
 const defaultAccent = "bg-[#f66f4d]";
-const maxUploadBytes = 3 * 1024 * 1024;
 
 type ProductImageUploadResponse = {
   imageUrl?: string;
   persisted?: boolean;
   message?: string;
 };
-
-function formatFileSize(bytes: number) {
-  return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
-}
-
-function loadImageFromUrl(url: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("图片读取失败，请换一张图片重试"));
-    image.src = url;
-  });
-}
-
-async function renderCompressedImage(
-  file: File,
-  maxDimension: number,
-  quality: number,
-) {
-  const objectUrl = URL.createObjectURL(file);
-
-  try {
-    const image = await loadImageFromUrl(objectUrl);
-    const scale = Math.min(
-      1,
-      maxDimension / Math.max(image.naturalWidth, image.naturalHeight),
-    );
-    const width = Math.max(Math.round(image.naturalWidth * scale), 1);
-    const height = Math.max(Math.round(image.naturalHeight * scale), 1);
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-
-    const context = canvas.getContext("2d");
-    if (!context) {
-      throw new Error("图片压缩失败，请换一张图片重试");
-    }
-
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, width, height);
-    context.drawImage(image, 0, 0, width, height);
-
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/jpeg", quality),
-    );
-
-    if (!blob) {
-      throw new Error("图片压缩失败，请换一张图片重试");
-    }
-
-    const baseName = file.name.replace(/\.[^.]+$/, "") || "product-image";
-
-    return new File([blob], `${baseName}.jpg`, {
-      type: "image/jpeg",
-    });
-  } finally {
-    URL.revokeObjectURL(objectUrl);
-  }
-}
-
-async function prepareProductImage(file: File) {
-  if (!file.type.startsWith("image/")) {
-    throw new Error("请上传图片文件");
-  }
-
-  if (file.size <= maxUploadBytes) {
-    return file;
-  }
-
-  const candidates = [
-    [1600, 0.82],
-    [1400, 0.72],
-    [1200, 0.64],
-    [900, 0.6],
-  ] as const;
-
-  let smallest: File | null = null;
-  for (const [maxDimension, quality] of candidates) {
-    const compressed = await renderCompressedImage(file, maxDimension, quality);
-    if (!smallest || compressed.size < smallest.size) {
-      smallest = compressed;
-    }
-    if (compressed.size <= maxUploadBytes) {
-      return compressed;
-    }
-  }
-
-  if (smallest && smallest.size <= maxUploadBytes) {
-    return smallest;
-  }
-
-  throw new Error(
-    `图片太大，压缩后仍超过 ${formatFileSize(maxUploadBytes)}，请换一张更小的图片`,
-  );
-}
 
 async function readUploadResponse(response: Response) {
   const text = await response.text();
@@ -118,7 +27,7 @@ async function readUploadResponse(response: Response) {
     if (text.startsWith("Request En")) {
       return {
         message: `图片太大，服务器拒绝接收。请压缩到 ${formatFileSize(
-          maxUploadBytes,
+          maxClientUploadBytes,
         )} 以内再上传。`,
       };
     }
@@ -232,8 +141,9 @@ export default function ProductsAdminPage() {
     setProducts((current) =>
       current.map((product) => {
         if (product.id !== productId) return product;
-        const { [location]: _removed, ...rest } = product.stockLocations;
-        return { ...product, stockLocations: rest };
+        const stockLocations = { ...product.stockLocations };
+        delete stockLocations[location];
+        return { ...product, stockLocations };
       }),
     );
   }
@@ -317,10 +227,10 @@ export default function ProductsAdminPage() {
       [productId]: nextPreviewUrl,
     }));
     setUploadingImages((current) => ({ ...current, [productId]: true }));
-    setMessage(file.size > maxUploadBytes ? "图片较大，正在压缩..." : "商品图片上传中...");
+    setMessage(file.size > maxClientUploadBytes ? "图片较大，正在压缩..." : "商品图片处理中...");
 
     try {
-      const uploadFile = await prepareProductImage(file);
+      const uploadFile = await prepareImageUpload(file, { label: "图片" });
       const formData = new FormData();
       formData.append("productId", productId);
       formData.append("image", uploadFile);

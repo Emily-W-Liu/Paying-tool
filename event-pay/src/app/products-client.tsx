@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CartItem, Product } from "@/lib/order-types";
 
@@ -19,29 +19,28 @@ export default function ProductsClient({ products }: { products: Product[] }) {
     return Array.from(locSet);
   }, [products]);
 
-  useEffect(() => {
-    if (locations.length > 0 && (!selectedLocation || !locations.includes(selectedLocation))) {
-      setSelectedLocation(locations[0]);
-    }
-  }, [locations]); // eslint-disable-line react-hooks/exhaustive-deps
+  const activeLocation =
+    locations.length > 0 && locations.includes(selectedLocation)
+      ? selectedLocation
+      : locations[0] ?? "";
 
-  useEffect(() => {
-    if (!selectedLocation) return;
+  function selectLocation(location: string) {
+    setSelectedLocation(location);
     setQuantities((current) => {
       const next = { ...current };
       for (const product of products) {
-        const locStock = product.stockLocations[selectedLocation] ?? 0;
+        const locStock = product.stockLocations[location] ?? 0;
         if ((next[product.id] ?? 0) > locStock) {
           next[product.id] = locStock;
         }
       }
       return next;
     });
-  }, [selectedLocation]); // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   function getProductStock(product: Product): number {
     if (Object.keys(product.stockLocations).length > 0) {
-      return product.stockLocations[selectedLocation] ?? 0;
+      return product.stockLocations[activeLocation] ?? 0;
     }
     return product.stock;
   }
@@ -73,12 +72,12 @@ export default function ProductsClient({ products }: { products: Product[] }) {
   function continueToSubmit() {
     if (!cart.length) return;
     window.localStorage.setItem("event-pay-cart", JSON.stringify(cart));
-    window.localStorage.setItem("event-pay-location", selectedLocation);
+    window.localStorage.setItem("event-pay-location", activeLocation);
     router.push("/submit");
   }
 
   const needsLocation = locations.length > 0;
-  const canSubmit = cart.length > 0 && (!needsLocation || Boolean(selectedLocation));
+  const canSubmit = cart.length > 0 && (!needsLocation || Boolean(activeLocation));
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col bg-[#f7f5ef]">
@@ -99,12 +98,12 @@ export default function ProductsClient({ products }: { products: Product[] }) {
             {locations.map((loc) => (
               <button
                 className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                  selectedLocation === loc
+                  activeLocation === loc
                     ? "bg-[#202124] text-white"
                     : "border border-[#d8d2c7] bg-white text-[#6b6257]"
                 }`}
                 key={loc}
-                onClick={() => setSelectedLocation(loc)}
+                onClick={() => selectLocation(loc)}
                 type="button"
               >
                 {loc}
@@ -161,7 +160,7 @@ export default function ProductsClient({ products }: { products: Product[] }) {
                       {Object.entries(product.stockLocations).map(([loc, locStock]) => (
                         <span
                           className={`rounded px-2 py-0.5 text-xs ${
-                            loc === selectedLocation
+                            loc === activeLocation
                               ? "bg-[#f0ece4] font-medium text-[#202124]"
                               : "text-[#9e9890]"
                           }`}
@@ -178,10 +177,10 @@ export default function ProductsClient({ products }: { products: Product[] }) {
                       className={`text-sm ${soldOut ? "text-[#b3261e]" : "text-[#5f6368]"}`}
                     >
                       {hasLocations
-                        ? selectedLocation
+                        ? activeLocation
                           ? soldOut
-                            ? `${selectedLocation} 已售完`
-                            : `${selectedLocation} 剩余 ${remaining}`
+                            ? `${activeLocation} 已售完`
+                            : `${activeLocation} 剩余 ${remaining}`
                           : "请先选择地区"
                         : soldOut
                           ? "库存 0"
@@ -203,7 +202,7 @@ export default function ProductsClient({ products }: { products: Product[] }) {
                       <button
                         aria-label={`增加 ${product.name}`}
                         className="h-9 text-lg disabled:text-[#b8b2a7]"
-                        disabled={soldOut || quantity >= remaining || (needsLocation && !selectedLocation)}
+                        disabled={soldOut || quantity >= remaining || (needsLocation && !activeLocation)}
                         onClick={() => updateQuantity(product.id, quantity + 1)}
                         type="button"
                       >
@@ -226,7 +225,7 @@ export default function ProductsClient({ products }: { products: Product[] }) {
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-4">
           <div>
             <p className="text-xs text-[#6b6257]">
-              已选 {totalQuantity} 件{selectedLocation ? ` · ${selectedLocation}` : ""}
+              已选 {totalQuantity} 件{activeLocation ? ` · ${activeLocation}` : ""}
             </p>
             <p className="text-2xl font-semibold text-[#202124]">¥{total}</p>
           </div>

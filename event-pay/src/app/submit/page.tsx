@@ -3,7 +3,37 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import {
+  formatFileSize,
+  maxClientUploadBytes,
+  prepareImageUpload,
+} from "@/lib/client-image";
 import type { CartItem, DemoOrder } from "@/lib/order-types";
+
+type SubmitOrderResponse = {
+  order?: DemoOrder;
+  message?: string;
+};
+
+async function readSubmitResponse(response: Response) {
+  const text = await response.text();
+
+  try {
+    return (text ? JSON.parse(text) : {}) as SubmitOrderResponse;
+  } catch {
+    if (text.startsWith("Request En")) {
+      return {
+        message: `付款截图太大，服务器拒绝接收。请压缩到 ${formatFileSize(
+          maxClientUploadBytes,
+        )} 以内再上传。`,
+      };
+    }
+
+    return {
+      message: text || "提交失败",
+    };
+  }
+}
 
 export default function SubmitPage() {
   const router = useRouter();
@@ -42,22 +72,22 @@ export default function SubmitPage() {
     setErrorMessage("");
 
     try {
+      const uploadScreenshot = await prepareImageUpload(screenshot, {
+        label: "付款截图",
+      });
       const formData = new FormData();
       formData.append("customerName", customerName);
       formData.append("contact", contact);
       formData.append("note", note);
       formData.append("location", location);
       formData.append("cart", JSON.stringify(cart));
-      formData.append("screenshot", screenshot);
+      formData.append("screenshot", uploadScreenshot);
 
       const response = await fetch("/api/orders", {
         method: "POST",
         body: formData,
       });
-      const data = (await response.json()) as {
-        order?: DemoOrder;
-        message?: string;
-      };
+      const data = await readSubmitResponse(response);
 
       if (!response.ok || !data.order) {
         throw new Error(data.message ?? "提交失败");
@@ -152,7 +182,9 @@ export default function SubmitPage() {
             type="file"
           />
           <span className="mt-2 block text-xs text-[#6b6257]">
-            {screenshot ? screenshot.name : "上传转账或付款完成截图"}
+            {screenshot
+              ? `${screenshot.name}，提交时会自动压缩`
+              : "上传转账或付款完成截图"}
           </span>
         </label>
 
